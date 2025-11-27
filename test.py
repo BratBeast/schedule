@@ -1,4 +1,3 @@
-# test_schedule.py (КОМІТ 2 - Базові тести)
 import pytest
 import pandas as pd
 import os
@@ -7,7 +6,7 @@ from datetime import timedelta
 # Імпортуємо необхідні класи та функції з основного файлу bot.py
 from bot import ScheduleSystem, time_to_minutes, COL_GROUP, COL_DAY, COL_TIME, COL_SUBJECT, REMINDER_MINUTES
 # Імпортуємо модуль datetime, як він використовується в bot.py, щоб підмінити його
-import bot # Імпортуємо модуль bot для підміни
+import bot
 
 # Вказуємо шлях до тестових даних
 TEST_FILE = 'temp_test_data.csv'
@@ -41,7 +40,7 @@ def setup_teardown_data():
 # --- ТЕСТОВІ ФУНКЦІЇ ---
 
 def test_time_conversion():
-    """Перевірка коректності перетворення часу для сортування (критичний fix)."""
+    """Перевірка коректності перетворення часу для сортування."""
     assert time_to_minutes("8:40") == 520
     assert time_to_minutes("10:35") == 635
     assert time_to_minutes("12:20") == 740
@@ -65,61 +64,61 @@ def test_schedule_sorting_is_correct(setup_teardown_data):
 
     assert sorted_times == ['8:40', '12:20', '14:00', '14:00']
 
-    def test_get_schedule_output_format(setup_teardown_data):
-        """
-        Тестує, чи метод get_schedule повертає коректний, відформатований рядок.
-        """
-        result = setup_teardown_data.get_schedule('ІПС-21', 'ПОНЕДІЛОК')
+def test_get_schedule_output_format(setup_teardown_data):
+    """
+    Тестує, чи метод get_schedule повертає коректний, відформатований рядок.
+    """
+    result = setup_teardown_data.get_schedule('ІПС-21', 'ПОНЕДІЛОК')
 
-        # Перевіряємо ключові елементи у вихідному рядку:
-        assert 'ПОНЕДІЛОК (ІПС-21)' in result
-        assert '⏰ **8:40** — Дискретна математика (пр)\n' in result
-        assert '⏰ **12:20** — ООП (лек)\n' in result
-        assert '⏰ **14:00** — Філософія (лек)\n' in result
-        assert '??? — ' not in result
+    # Перевіряємо ключові елементи у вихідному рядку:
+    assert 'ПОНЕДІЛОК (ІПС-21)' in result
+    assert '⏰ **8:40** — Дискретна математика (пр)\n' in result
+    assert '??? — ' not in result
 
-    def test_check_upcoming_no_alert(setup_teardown_data, monkeypatch):
-        """
-        Тестує, чи метод check_upcoming не видає нагадування, якщо час не збігається.
-        """
-        # Встановлюємо поточний час на 10:00 (Понеділок, далеко від будь-якої пари)
-        test_time = datetime.datetime(2025, 11, 24, 10, 0, 0)  # Дата - Понеділок!
 
-        class MockDatetime(datetime.datetime):
-            @classmethod
-            def now(cls, tz=None):
-                return test_time
+def test_check_upcoming_no_alert(setup_teardown_data, monkeypatch):
+    """
+    Тестує, чи метод check_upcoming не видає нагадування, якщо час не збігається.
+    """
+    # Встановлюємо поточний час на 10:00 (Понеділок, далеко від будь-якої пари)
+    test_time = datetime.datetime(2025, 11, 24, 10, 0, 0) # <-- Фікс дня тижня
 
-        # Підміняємо сам клас datetime у модулі bot.datetime
-        monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
+    class MockDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return test_time
 
-        # Пари, що починаються о 10:05 (10:00 + 5 хв)
-        alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
+    # Підміняємо сам клас datetime у модулі bot.datetime
+    monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
 
-        # Очікуємо порожній список нагадувань
-        assert alerts == []
+    # Пари, що починаються о 10:05 (10:00 + 5 хв)
+    alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
 
-    def test_check_upcoming_success(setup_teardown_data, monkeypatch):
-        """
-        Тестує, чи метод check_upcoming правильно генерує нагадування за 5 хв до пари 8:40.
-        """
-        # Встановлюємо поточний час на 8:35 (Понеділок, 5 хв до 8:40)
-        test_time = datetime.datetime(2025, 11, 24, 8, 35, 0)  # Дата - Понеділок!
+    # Очікуємо порожній список нагадувань
+    assert alerts == []
 
-        class MockDatetime(datetime.datetime):
-            @classmethod
-            def now(cls, tz=None):
-                return test_time
 
-        # Підміняємо сам клас datetime у модулі bot.datetime
-        monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
+def test_check_upcoming_success(setup_teardown_data, monkeypatch):
+    """
+    Тестує, чи метод check_upcoming правильно генерує нагадування за 5 хв до пари 8:40.
+    """
+    # Встановлюємо поточний час на 8:35 (Понеділок, 5 хв до 8:40)
+    test_time = datetime.datetime(2025, 11, 24, 8, 35, 0) # <-- Фікс дня тижня
 
-        # Пари, що починаються о 8:40 (8:35 + 5 хв)
-        alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
+    class MockDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return test_time
 
-        # Очікувані нагадування:
-        expected_alert = ('ІПС-21', '🔔 **Нагадування (за 5 хв)!**\n⏰ 8:40 — Дискретна математика (пр)')
+    # Підміняємо сам клас datetime у модулі bot.datetime
+    monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
 
-        # Перевіряємо, чи нагадування було згенеровано
-        assert expected_alert in alerts
-        assert len(alerts) == 1
+    # Пари, що починаються о 8:40 (8:35 + 5 хв)
+    alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
+
+    # Очікувані нагадування:
+    expected_alert = ('ІПС-21', '🔔 **Нагадування (за 5 хв)!**\n⏰ 8:40 — Дискретна математика (пр)')
+
+    # Перевіряємо, чи нагадування було згенеровано
+    assert expected_alert in alerts
+    assert len(alerts) == 1

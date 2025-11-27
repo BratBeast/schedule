@@ -18,9 +18,10 @@ COL_GROUP = 'Група'
 COL_DAY = 'День'
 COL_TIME = 'Час'
 COL_SUBJECT = 'Предмет'
-REMINDER_MINUTES = 5  # Нагадування за 5 хвилин до початку пари
+REMINDER_MINUTES = 5
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 def time_to_minutes(time_str):
     """
@@ -65,7 +66,6 @@ class ScheduleSystem:
         Фільтрує розклад (видаляючи теги тижнів, щоб вони не заважали) та сортує його ЧИСЛОВО за часом.
         """
 
-        # Ми видалили логіку тижнів, але залишаємо сортування
         combined_df = filtered_df.copy().drop_duplicates()
 
         return combined_df.sort_values(
@@ -89,8 +89,8 @@ class ScheduleSystem:
         text = f"📅 **{day} ({group})**:\n"
         for _, row in sorted_df.iterrows():
             subject = row.get(COL_SUBJECT, '')
-            subject_clean = subject.replace('(Непарний)', '').replace('(Парний)', '').strip()
-            text += f"⏰ **{row.get(COL_TIME, '???')}** — {subject_clean}\n"
+            # --- КОМІТ 5: Відображення повного назви предмета (без очищення) ---
+            text += f"⏰ **{row.get(COL_TIME, '???')}** — {subject}\n"
         return text
 
     def check_upcoming(self, minutes=REMINDER_MINUTES):
@@ -104,7 +104,14 @@ class ScheduleSystem:
         if not current_day: return []
 
         target_datetime = now + timedelta(minutes=minutes)
-        target_time = target_datetime.strftime("%H:%M")
+        target_time_raw = target_datetime.strftime("%H:%M")
+
+        # --- КОМІТ 4: Фікс формату часу (видалення провідного нуля) ---
+        if target_time_raw.startswith('0'):
+            target_time = target_time_raw[1:]
+        else:
+            target_time = target_time_raw
+        # -----------------------------------------------------------
 
         matches = self.df[
             (self.df[COL_DAY] == current_day) &
@@ -115,7 +122,7 @@ class ScheduleSystem:
 
         alerts = []
         for _, row in matches_sorted.drop_duplicates(subset=[COL_GROUP, COL_SUBJECT]).iterrows():
-            # Нагадування має бути чистим, тому тут видаляємо теги тижнів
+            # Нагадування залишаємо чистим
             subject = row[COL_SUBJECT].replace('(Непарний)', '').replace('(Парний)', '').strip()
             alerts.append((row[COL_GROUP], f"🔔 **Нагадування (за {minutes} хв)!**\n⏰ {row[COL_TIME]} — {subject}"))
 
@@ -123,7 +130,6 @@ class ScheduleSystem:
 
 
 # ================= 2. УПРАВЛІННЯ КОРИСТУВАЧАМИ =================
-# user_registry: {user_id: {'group': 'ІПС-21', 'reminders': True}}
 user_registry = {}
 
 # ================= 3. FRONTEND: БОТ ТА ІНТЕРФЕЙС =================
@@ -252,7 +258,7 @@ async def job():
 
 
 async def main():
-    scheduler.add_job(job, "interval", minutes=1)  # Перевіряємо щохвилини
+    scheduler.add_job(job, "interval", minutes=1)
     scheduler.start()
     logging.info("Бот запущено! Планувальник нагадувань активний.")
     await dp.start_polling(bot)
