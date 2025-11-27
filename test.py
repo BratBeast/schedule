@@ -64,3 +64,62 @@ def test_schedule_sorting_is_correct(setup_teardown_data):
     sorted_times = df_sorted[COL_TIME].tolist()
 
     assert sorted_times == ['8:40', '12:20', '14:00', '14:00']
+
+    def test_get_schedule_output_format(setup_teardown_data):
+        """
+        Тестує, чи метод get_schedule повертає коректний, відформатований рядок.
+        """
+        result = setup_teardown_data.get_schedule('ІПС-21', 'ПОНЕДІЛОК')
+
+        # Перевіряємо ключові елементи у вихідному рядку:
+        assert 'ПОНЕДІЛОК (ІПС-21)' in result
+        assert '⏰ **8:40** — Дискретна математика (пр)\n' in result
+        assert '⏰ **12:20** — ООП (лек)\n' in result
+        assert '⏰ **14:00** — Філософія (лек)\n' in result
+        assert '??? — ' not in result
+
+    def test_check_upcoming_no_alert(setup_teardown_data, monkeypatch):
+        """
+        Тестує, чи метод check_upcoming не видає нагадування, якщо час не збігається.
+        """
+        # Встановлюємо поточний час на 10:00 (Понеділок, далеко від будь-якої пари)
+        test_time = datetime.datetime(2025, 11, 24, 10, 0, 0)  # Дата - Понеділок!
+
+        class MockDatetime(datetime.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return test_time
+
+        # Підміняємо сам клас datetime у модулі bot.datetime
+        monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
+
+        # Пари, що починаються о 10:05 (10:00 + 5 хв)
+        alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
+
+        # Очікуємо порожній список нагадувань
+        assert alerts == []
+
+    def test_check_upcoming_success(setup_teardown_data, monkeypatch):
+        """
+        Тестує, чи метод check_upcoming правильно генерує нагадування за 5 хв до пари 8:40.
+        """
+        # Встановлюємо поточний час на 8:35 (Понеділок, 5 хв до 8:40)
+        test_time = datetime.datetime(2025, 11, 24, 8, 35, 0)  # Дата - Понеділок!
+
+        class MockDatetime(datetime.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return test_time
+
+        # Підміняємо сам клас datetime у модулі bot.datetime
+        monkeypatch.setattr(bot.datetime, 'datetime', MockDatetime)
+
+        # Пари, що починаються о 8:40 (8:35 + 5 хв)
+        alerts = setup_teardown_data.check_upcoming(minutes=REMINDER_MINUTES)
+
+        # Очікувані нагадування:
+        expected_alert = ('ІПС-21', '🔔 **Нагадування (за 5 хв)!**\n⏰ 8:40 — Дискретна математика (пр)')
+
+        # Перевіряємо, чи нагадування було згенеровано
+        assert expected_alert in alerts
+        assert len(alerts) == 1
